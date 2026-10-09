@@ -131,3 +131,31 @@ class BookDetail(Resource):
         except services.Forbidden:
             return {"message": "You do not own this book"}, 403
         return "", 204
+
+class BookOpenLibrary(Resource):
+    """/books/<id>/openlibrary: preview (GET) or save (PUT) Open Library data for a book."""
+
+    def get(self, book_id: int) -> ApiResponse:
+        """Return the best Open Library match for this book without changing it."""
+        try:
+            return services.find_open_library_match(get_db(), book_id), 200
+        except services.NotFound:
+            return {"message": "Book not found"}, 404
+        except services.NoOpenLibraryMatch:
+            return {"message": "No match found on Open Library"}, 404
+        except services.ExternalServiceError:
+            return {"message": "Open Library is unavailable; try again later"}, 502
+
+    @auth_required
+    def put(self, book_id: int) -> ApiResponse:
+        """Save the Open Library match onto the book, if the caller owns it."""
+        try:
+            return services.apply_open_library_match(get_db(), g.user_id, book_id), 200
+        except services.NotFound:
+            return {"message": "Book not found"}, 404
+        except services.Forbidden:
+            return {"message": "You do not own this book"}, 403
+        except services.NoOpenLibraryMatch:
+            return {"message": "No match found on Open Library"}, 404
+        except services.ExternalServiceError:
+            return {"message": "Open Library is unavailable; try again later"}, 502

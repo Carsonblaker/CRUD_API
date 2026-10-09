@@ -6,7 +6,7 @@ from flask import Flask
 from flask_restful import Api
 from flask_talisman import Talisman
 
-from cs188_a3.resources import BookDetail, BookList, Register, close_db
+from cs188_a3.resources import BookDetail, BookList, BookOpenLibrary, Register, close_db
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]  # src/cs188_a3/app.py -> project folder
 CERTIFICATE_PATH = PROJECT_ROOT / "MyCertificate.crt"
@@ -21,6 +21,7 @@ def init_api(app: Flask) -> None:
     api.add_resource(Register, "/register")
     api.add_resource(BookList, "/books")
     api.add_resource(BookDetail, "/books/<int(signed=True):book_id>")
+    api.add_resource(BookOpenLibrary, "/books/<int(signed=True):book_id>/openlibrary")
 
 
 def create_app(db_path: str | Path = DEFAULT_DB_PATH) -> Flask:

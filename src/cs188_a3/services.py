@@ -7,6 +7,8 @@ from flask_bcrypt import Bcrypt
 
 from cs188_a3.db import Database
 
+from cs188_a3 import openlibrary
+
 MIN_PASSWORD_LENGTH = 8
 MAX_PASSWORD_BYTES = 72  # bcrypt can only hash the first 72 bytes of a password
 MAX_USERNAME_LENGTH = 50
@@ -39,6 +41,12 @@ class NotFound(Exception):
 class Forbidden(Exception):
     """Raised when a user tries to change a record they don't own."""
 
+class NoOpenLibraryMatch(Exception):
+    """Raised when Open Library has no match for a book."""
+
+
+class ExternalServiceError(Exception):
+    """Raised when Open Library is unreachable or returns an error."""
 
 # ---------- Users ----------
 
@@ -192,3 +200,47 @@ def delete_book(db: Database, user_id: int, book_id: int) -> None:
     if book["owner_id"] != user_id:
         raise Forbidden()
     db.delete_book(book_id)
+
+				# ---------- Open Library ----------
+
+def _description_text(work: dict[str, Any]) -> str | None:
+    """Return a work's description; Open Library stores it as a string or {"value": ...}."""
+    description = work.get("description")
+    if isinstance(description, dict):
+        description = description.get("value")
+    return description if isinstance(description, str) else None
+
+
+def find_open_library_match(db: Database, book_id: int) -> dict[str, Any]:
+    """Look up a book on Open Library and return the best match without saving it."""
+    book = get_book(db, book_id)
+    try:
+        match = openlibrary.search_work(book["title"], book["author"])
+        if match is None:
+            raise NoOpenLibraryMatch()
+        work = openlibrary.get_work(match["key"])
+    except openlibrary.OpenLibraryError as err:
+        raise ExternalServiceError() from err
+    return {
+        "ol_work_key": match.get("key"),
+        "title": match.get("title"),
+        "authors": match.get("author_name", []),
+        "first_publish_year": match.get("first_publish_year"),
+        "pages": match.get("number_of_pages_median"),
+        "description": _description_text(work),
+        "subjects": work.get("subjects", [])[:10],
+    }
+
+
+def apply_open_library_match(db: Database, user_id: int, book_id: int) -> dict[str, Any]:
+    """Save Open Library data onto a book the user owns, and return the updated book."""
+    book = get_book(db, book_id)
+    if book["owner_id"] != user_id:
+        raise Forbidden()
+    match = find_open_library_match(db, book_id)
+    book["ol_work_key"] = match["ol_work_key"]
+    book["first_publish_year"] = match["first_publish_year"]
+    if book["pages"] is None:  # don't overwrite a page count the user entered
+        book["pages"] = match["pages"]
+    db.update_book(book_id, book)
+    return book
