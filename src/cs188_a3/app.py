@@ -24,11 +24,14 @@ def init_api(app: Flask) -> None:
     api.add_resource(BookOpenLibrary, "/books/<int(signed=True):book_id>/openlibrary")
 
 
-def create_app(db_path: str | Path = DEFAULT_DB_PATH) -> Flask:
-    """Build and configure the Flask app, using the SQLite database at db_path."""
+def create_app(db_path: str | Path = DEFAULT_DB_PATH, force_https: bool = True) -> Flask:
+    """Build and configure the Flask app, using the SQLite database at db_path.
+
+    Tests pass force_https=False because Flask's test client talks plain HTTP.
+    """
     app = Flask(__name__)
     app.config["DATABASE"] = str(db_path)
-    Talisman(app)  # redirects HTTP to HTTPS and adds security headers
+    Talisman(app, force_https=force_https)  # adds security headers; redirects HTTP to HTTPS
     app.teardown_appcontext(close_db)  # close the DB connection after every request
     init_api(app)
     return app
